@@ -107,39 +107,36 @@ The API will be available at:
 
 ## API Endpoints
 
-### Store Context
+### Slack Context (Conversational)
 ```http
-POST /api/context
+POST /api/context/slack
 ```
+
+Store Slack bot conversation context with AI enrichment.
 
 **Request Body:**
 ```json
 {
   "userId": "user123",
-  "sessionId": "session456",
+  "sessionId": "channel_general",
   "appContext": {
-    "appName": "MyApp",
-    "version": "1.0.0"
+    "appName": "SlackBot",
+    "channel": "general",
+    "threadTs": "1234567890.123456"
   },
   "conversationHistory": [
     {
       "role": "user",
-      "message": "Hello",
+      "message": "What are your business hours?",
       "timestamp": "2024-12-09T10:00:00Z"
     }
   ],
   "userPreferences": {
-    "theme": "dark",
-    "language": "en"
+    "language": "en",
+    "notifications": true
   },
   "deviceInfo": {
-    "platform": "iOS",
-    "deviceId": "device789"
-  },
-  "activityLog": [],
-  "location": {
-    "country": "US",
-    "city": "San Francisco"
+    "platform": "slack"
   },
   "timestamp": "2024-12-09T10:00:00Z"
 }
@@ -149,21 +146,65 @@ POST /api/context
 ```json
 {
   "status": "success",
-  "contextId": "ctx_abc123",
+  "contextId": "ctx_slack_abc123",
   "enrichedContext": {
-    "summary": "User initiated conversation",
-    "keyTopics": ["conversation", "interaction"],
-    "userIntent": "conversation_started",
+    "summary": "User asking about business hours",
+    "keyTopics": ["hours", "availability"],
+    "userIntent": "information_request",
     "sentimentAnalysis": {
       "sentiment": "neutral",
-      "confidence": 0.75
+      "confidence": 0.85
     }
   },
   "recommendations": [
-    "Greet the user warmly",
-    "Ask how you can help"
+    "Provide business hours",
+    "Respond in en language"
   ],
-  "message": "Context successfully stored and enriched"
+  "message": "Slack context successfully stored and enriched"
+}
+```
+
+### Unify Context (Workflow)
+```http
+POST /api/context/unify
+```
+
+Store Unify AI workflow context for code repositories and tickets.
+
+**Request Body:**
+```json
+{
+  "userId": "developer123",
+  "sessionId": "work_session_456",
+  "repoID": "repo_abc123",
+  "catalogID": "unify_map",
+  "ticketID": "JIRA-1234",
+  "contextLevel": "ticket",
+  "AI_Client_type": ["Claude", "AWSQ"],
+  "details": "I am trying to fix the authentication bug in the login module",
+  "files": [
+    {
+      "path": "src/auth/login.py",
+      "type": "python",
+      "action": "modified"
+    }
+  ],
+  "timestamp": "2024-12-09T10:00:00Z"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "contextId": "ctx_unify_xyz789",
+  "details": "Context captured for ticket JIRA-1234 in repo repo_abc123",
+  "userAlert": "AI agents are now aware of your JIRA-1234 context",
+  "file": {
+    "count": 1,
+    "files": [...]
+  },
+  "message": "Unify workflow context successfully stored"
 }
 ```
 
@@ -195,23 +236,37 @@ pytest --cov=api tests/
 ## Example Usage with cURL
 
 ```bash
-# Store context
-curl -X POST http://localhost:8000/api/context \
+# Store Slack context
+curl -X POST http://localhost:8000/api/context/slack \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user123",
-    "sessionId": "session456",
-    "appContext": {"appName": "TestApp"},
-    "conversationHistory": [],
-    "userPreferences": {},
-    "deviceInfo": {},
-    "activityLog": [],
-    "location": {},
+    "sessionId": "channel_general",
+    "appContext": {"appName": "SlackBot", "channel": "general"},
+    "conversationHistory": [{"role": "user", "message": "Hello", "timestamp": "2024-12-09T10:00:00Z"}],
+    "userPreferences": {"language": "en"},
+    "deviceInfo": {"platform": "slack"},
+    "timestamp": "2024-12-09T10:00:00Z"
+  }'
+
+# Store Unify context
+curl -X POST http://localhost:8000/api/context/unify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "developer123",
+    "sessionId": "work_session_456",
+    "repoID": "repo_abc123",
+    "catalogID": "unify_map",
+    "ticketID": "JIRA-1234",
+    "contextLevel": "ticket",
+    "AI_Client_type": ["Claude", "AWSQ"],
+    "details": "Fixing authentication bug",
+    "files": [{"path": "src/auth/login.py", "type": "python"}],
     "timestamp": "2024-12-09T10:00:00Z"
   }'
 
 # Retrieve context
-curl http://localhost:8000/api/context/ctx_abc123
+curl http://localhost:8000/api/context/ctx_slack_abc123
 
 # Get user contexts
 curl http://localhost:8000/api/contexts/user/user123?limit=5
