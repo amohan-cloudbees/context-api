@@ -22,7 +22,7 @@ class UserContext(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v4()"))
     context_id = Column(String(255), unique=True, nullable=False, index=True)
-    context_type = Column(Enum(ContextTypeEnum), nullable=False, default=ContextTypeEnum.SLACK, index=True)
+    context_type = Column(Enum(ContextTypeEnum, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ContextTypeEnum.SLACK, index=True)
     user_id = Column(String(255), nullable=False, index=True)
     session_id = Column(String(255), nullable=False, index=True)
 
