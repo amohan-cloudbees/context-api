@@ -280,10 +280,6 @@ For production deployment:
 - WebSocket support for real-time updates
 - Docker containerization
 
-## License
-
-MIT License
-
 ## Support
 
 For issues or questions, please open an issue in the repository.
