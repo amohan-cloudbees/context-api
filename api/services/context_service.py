@@ -5,8 +5,12 @@ import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from api.models.context import UserContext, ContextAnalytics
-from api.schemas.context_schema import ContextRequest, ContextResponse, EnrichedContext
+from api.models.context import UserContext, ContextAnalytics, ContextTypeEnum
+from api.schemas.context_schema import (
+    ContextRequest, ContextResponse, EnrichedContext,
+    SlackContextRequest, SlackContextResponse,
+    UnifyContextRequest, UnifyContextResponse
+)
 
 
 class ContextService:
@@ -157,3 +161,131 @@ class ContextService:
             # Don't fail the main operation if analytics logging fails
             self.db.rollback()
             print(f"Analytics logging failed: {e}")
+
+    # ============ SLACK CONTEXT METHODS ============
+
+    def store_slack_context(self, context_data: SlackContextRequest) -> SlackContextResponse:
+        """Store Slack conversational context data"""
+        try:
+            # Generate unique context ID
+            context_id = f"ctx_slack_{uuid.uuid4().hex[:12]}"
+
+            # Prepare slack_data JSONB
+            slack_data = {
+                "appContext": context_data.appContext or {},
+                "conversationHistory": context_data.conversationHistory or [],
+                "userPreferences": context_data.userPreferences or {},
+                "deviceInfo": context_data.deviceInfo or {},
+                "activityLog": context_data.activityLog or [],
+                "location": context_data.location or {}
+            }
+
+            # Create context record
+            user_context = UserContext(
+                context_id=context_id,
+                context_type=ContextTypeEnum.SLACK,
+                user_id=context_data.userId,
+                session_id=context_data.sessionId,
+                slack_data=slack_data,
+                timestamp=context_data.timestamp
+            )
+
+            # Save to database
+            self.db.add(user_context)
+            self.db.commit()
+            self.db.refresh(user_context)
+
+            # Enrich context with AI analysis
+            enriched_context = self.enrich_context(context_data)
+
+            # Generate recommendations
+            recommendations = self.generate_recommendations(context_data, enriched_context)
+
+            # Log analytics event
+            self._log_analytics_event(context_id, "slack_context_stored", {
+                "user_id": context_data.userId,
+                "session_id": context_data.sessionId
+            })
+
+            return SlackContextResponse(
+                status="success",
+                contextId=context_id,
+                enrichedContext=enriched_context,
+                recommendations=recommendations,
+                message="Slack context successfully stored and enriched"
+            )
+
+        except Exception as e:
+            self.db.rollback()
+            raise e
+
+    # ============ UNIFY CONTEXT METHODS ============
+
+    def store_unify_context(self, context_data: UnifyContextRequest) -> UnifyContextResponse:
+        """Store Unify workflow context data"""
+        try:
+            # Generate unique context ID
+            context_id = f"ctx_unify_{uuid.uuid4().hex[:12]}"
+
+            # Prepare unify_data JSONB
+            unify_data = {
+                "repoID": context_data.repoID,
+                "catalogID": context_data.catalogID,
+                "ticketID": context_data.ticketID,
+                "contextLevel": context_data.contextLevel,
+                "AI_Client_type": context_data.AI_Client_type,
+                "details": context_data.details,
+                "files": context_data.files or []
+            }
+
+            # Create context record
+            user_context = UserContext(
+                context_id=context_id,
+                context_type=ContextTypeEnum.UNIFY,
+                user_id=context_data.userId,
+                session_id=context_data.sessionId,
+                unify_data=unify_data,
+                timestamp=context_data.timestamp
+            )
+
+            # Save to database
+            self.db.add(user_context)
+            self.db.commit()
+            self.db.refresh(user_context)
+
+            # Generate response per ContextPLTC spec
+            details = f"Context captured for ticket {context_data.ticketID} in repo {context_data.repoID}"
+
+            # Check for alerts (mock logic - in production, check for conflicts/issues)
+            user_alert = None
+            if context_data.contextLevel == "ticket":
+                user_alert = f"AI agents are now aware of your {context_data.ticketID} context"
+
+            # File tracking
+            file_info = None
+            if context_data.files:
+                file_info = {
+                    "count": len(context_data.files),
+                    "files": context_data.files
+                }
+
+            # Log analytics event
+            self._log_analytics_event(context_id, "unify_context_stored", {
+                "user_id": context_data.userId,
+                "repo_id": context_data.repoID,
+                "ticket_id": context_data.ticketID,
+                "context_level": context_data.contextLevel
+            })
+
+            return UnifyContextResponse(
+                status="success",
+                contextId=context_id,
+                details=details,
+                userAlert=user_alert,
+                file=file_info,
+                message="Unify workflow context successfully stored"
+            )
+
+        except Exception as e:
+            self.db.rollback()
+            raise e

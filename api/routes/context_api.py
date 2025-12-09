@@ -3,7 +3,11 @@ FastAPI routes for Context API
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from api.schemas.context_schema import ContextRequest, ContextResponse, ErrorResponse
+from api.schemas.context_schema import (
+    ContextRequest, ContextResponse, ErrorResponse,
+    SlackContextRequest, SlackContextResponse,
+    UnifyContextRequest, UnifyContextResponse
+)
 from api.services.context_service import ContextService
 from config.database import get_db
 
@@ -152,3 +156,125 @@ async def health_check():
         "service": "Context API",
         "version": "1.0.0"
     }
+
+
+# ============ SLACK CONTEXT ENDPOINTS ============
+
+@router.post(
+    "/context/slack",
+    response_model=SlackContextResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        201: {"description": "Slack context successfully stored"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    },
+    tags=["Slack Context"]
+)
+async def store_slack_context(
+    context_data: SlackContextRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Store Slack conversational context data
+
+    This endpoint receives Slack bot conversation data and:
+    - Stores it in the database
+    - Enriches it with AI analysis (sentiment, intent, topics)
+    - Returns recommendations for bot responses
+
+    **Request Body:**
+    - userId: Unique identifier for the user
+    - sessionId: Session identifier (can be channel ID)
+    - appContext: Slack-specific context (channel, thread, etc.)
+    - conversationHistory: Array of conversation messages
+    - userPreferences: User preferences (language, theme, etc.)
+    - deviceInfo: Device/client information
+    - activityLog: Array of user activities
+    - location: Location/timezone data
+    - timestamp: Event timestamp
+
+    **Response:**
+    - status: Operation status
+    - contextId: Unique ID for this context
+    - enrichedContext: AI-enriched analysis (summary, sentiment, intent, topics)
+    - recommendations: AI-generated recommendations for bot responses
+    - message: Response message
+    """
+    try:
+        service = ContextService(db)
+        response = service.store_slack_context(context_data)
+        return response
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"status": "error", "error": "ValidationError", "details": str(e)}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"status": "error", "error": "InternalServerError", "details": str(e)}
+        )
+
+
+# ============ UNIFY CONTEXT ENDPOINTS ============
+
+@router.post(
+    "/context/unify",
+    response_model=UnifyContextResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        201: {"description": "Unify context successfully stored"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    },
+    tags=["Unify Context"]
+)
+async def store_unify_context(
+    context_data: UnifyContextRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Store Unify workflow context data (per ContextPLTC specification)
+
+    This endpoint receives Unify AI workflow context for code repositories, tickets, and AI agent coordination:
+    - Stores workflow context in the database
+    - Tracks files, repos, and tickets
+    - Enables AI agents to access relevant context
+
+    **Request Body:**
+    - userId: Unique identifier for the developer/user
+    - sessionId: Work session identifier
+    - repoID: Repository identifier
+    - catalogID: Source catalog (e.g., "unify_map")
+    - ticketID: Jira or ticket system ID
+    - contextLevel: Scope of context ("global", "project", or "ticket")
+    - AI_Client_type: List of AI tools involved (e.g., ["Claude", "AWSQ", "OpenCase"])
+    - details: Natural language description of the user's action/goal
+    - files: Array of file references
+    - timestamp: Event timestamp
+
+    **Response:**
+    - status: Operation status
+    - contextId: Unique ID for this context
+    - details: High-level status information
+    - userAlert: User-facing alert message (if applicable)
+    - file: File tracking information
+    - message: Response message
+    """
+    try:
+        service = ContextService(db)
+        response = service.store_unify_context(context_data)
+        return response
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"status": "error", "error": "ValidationError", "details": str(e)}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"status": "error", "error": "InternalServerError", "details": str(e)}
+        )
