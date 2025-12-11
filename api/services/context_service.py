@@ -119,3 +119,77 @@ class ContextService:
             # Don't fail the main operation if analytics logging fails
             self.db.rollback()
             print(f"Analytics logging failed: {e}")
+
+    # ============ CONTEXT DISCOVERY METHODS ============
+
+    def search_contexts(
+        self,
+        repo_id: Optional[str] = None,
+        ticket_id: Optional[str] = None,
+        file_path: Optional[str] = None,
+        context_level: Optional[str] = None,
+        ai_client: Optional[str] = None,
+        query_text: Optional[str] = None,
+        limit: int = 10
+    ) -> list[Dict[str, Any]]:
+        """
+        Search contexts with flexible filtering
+
+        This is the core discovery method for AI agents to find relevant context
+        """
+        query = self.db.query(UserContext)
+
+        # Filter by repoID
+        if repo_id:
+            query = query.filter(UserContext.context_data['repoID'].astext == repo_id)
+
+        # Filter by ticketID
+        if ticket_id:
+            query = query.filter(UserContext.context_data['ticketID'].astext == ticket_id)
+
+        # Filter by file path (partial match)
+        if file_path:
+            query = query.filter(
+                UserContext.context_data['files'].astext.contains(file_path)
+            )
+
+        # Filter by context level
+        if context_level:
+            query = query.filter(
+                UserContext.context_data['contextLevel'].astext == context_level
+            )
+
+        # Filter by AI client type
+        if ai_client:
+            query = query.filter(
+                UserContext.context_data['AI_Client_type'].astext.contains(ai_client)
+            )
+
+        # Text search in details field
+        if query_text:
+            query = query.filter(
+                UserContext.context_data['details'].astext.ilike(f'%{query_text}%')
+            )
+
+        # Order by most recent and limit results
+        contexts = query.order_by(
+            UserContext.timestamp.desc()
+        ).limit(limit).all()
+
+        return [ctx.to_dict() for ctx in contexts]
+
+    def get_contexts_by_repo(self, repo_id: str, limit: int = 20) -> list[Dict[str, Any]]:
+        """Get all contexts for a specific repository"""
+        contexts = self.db.query(UserContext).filter(
+            UserContext.context_data['repoID'].astext == repo_id
+        ).order_by(UserContext.timestamp.desc()).limit(limit).all()
+
+        return [ctx.to_dict() for ctx in contexts]
+
+    def get_contexts_by_ticket(self, ticket_id: str, limit: int = 20) -> list[Dict[str, Any]]:
+        """Get all contexts for a specific ticket"""
+        contexts = self.db.query(UserContext).filter(
+            UserContext.context_data['ticketID'].astext == ticket_id
+        ).order_by(UserContext.timestamp.desc()).limit(limit).all()
+
+        return [ctx.to_dict() for ctx in contexts]

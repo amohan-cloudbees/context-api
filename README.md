@@ -6,6 +6,11 @@ A FastAPI service for managing workflow context data for AI agents, code reposit
 
 - **Workflow Context Storage**: Store context for repos, tickets, and AI agent coordination
 - **Multi-Level Context**: Support for global, project, and ticket-level context
+- **Context Discovery & Search**: Flexible search API for AI agents to find relevant context
+  - Search by repository, ticket, file path
+  - Filter by context level and AI client type
+  - Full-text search in details field
+  - Optimized with PostgreSQL JSONB indexes
 - **Context Retrieval**: Query contexts by ID, user, or workflow
 - **Analytics Tracking**: Monitor context usage and patterns
 - **AI Agent Integration**: Enable Claude, AWS Q, and other AI tools to access context
@@ -167,6 +172,49 @@ GET /api/context/{context_id}
 GET /api/contexts/user/{user_id}?limit=10
 ```
 
+### Search Contexts (Context Discovery)
+```http
+GET /api/contexts/search?repoID=repo_abc123&query=authentication&limit=10
+```
+
+Search and discover contexts with flexible filtering. This is the primary endpoint for AI agents to find relevant context.
+
+**Query Parameters:**
+- `repoID`: Filter by repository ID
+- `ticketID`: Filter by ticket ID
+- `filePath`: Search by file path (partial match supported)
+- `contextLevel`: Filter by level (global, project, ticket)
+- `aiClient`: Filter by AI client type (Claude, AWSQ, etc.)
+- `query`: Text search in details field
+- `limit`: Maximum results (1-100, default 10)
+
+**Example Response:**
+```json
+{
+  "status": "success",
+  "count": 3,
+  "filters": {
+    "repoID": "repo_abc123",
+    "query": "authentication"
+  },
+  "data": [...]
+}
+```
+
+### Get Repository Contexts
+```http
+GET /api/contexts/repo/{repo_id}?limit=20
+```
+
+Get all contexts for a specific repository.
+
+### Get Ticket Contexts
+```http
+GET /api/contexts/ticket/{ticket_id}?limit=20
+```
+
+Get all contexts for a specific ticket (e.g., JIRA-1234).
+
 ### Health Check
 ```http
 GET /api/health
@@ -206,6 +254,21 @@ curl http://localhost:8000/api/context/ctx_xyz789
 
 # Get all contexts for a user
 curl http://localhost:8000/api/contexts/user/developer123?limit=10
+
+# Search contexts by repository
+curl "http://localhost:8000/api/contexts/search?repoID=repo_abc123&limit=5"
+
+# Search contexts with text query
+curl "http://localhost:8000/api/contexts/search?query=authentication&contextLevel=ticket"
+
+# Search by file path
+curl "http://localhost:8000/api/contexts/search?filePath=src/auth/login.py"
+
+# Get all contexts for a repository
+curl http://localhost:8000/api/contexts/repo/repo_abc123
+
+# Get all contexts for a ticket
+curl http://localhost:8000/api/contexts/ticket/JIRA-1234
 ```
 
 ## Example Usage with Python
@@ -246,6 +309,23 @@ print(f"User Alert: {result.get('userAlert')}")
 # Retrieve the stored context
 context = requests.get(f"http://localhost:8000/api/context/{context_id}")
 print(f"Retrieved context: {context.json()}")
+
+# Search for contexts related to authentication in a repo
+search_results = requests.get(
+    "http://localhost:8000/api/contexts/search",
+    params={
+        "repoID": "repo_abc123",
+        "query": "authentication",
+        "limit": 5
+    }
+)
+print(f"Found {search_results.json()['count']} matching contexts")
+
+# Get all contexts for a specific ticket
+ticket_contexts = requests.get(
+    "http://localhost:8000/api/contexts/ticket/JIRA-1234"
+)
+print(f"Ticket has {ticket_contexts.json()['count']} contexts")
 ```
 
 ## Configuration
