@@ -20,20 +20,20 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="""
-    ## Context API for Unify AI
+    ## Context Plane API for Unify AI
 
-    This API enables applications to store and retrieve user context data
-    with AI-powered enrichment and recommendations.
+    This API provides the foundation for the Context Plane - a knowledge base system
+    that manages workflow context for AI agents, code repositories, and ticket workflows.
 
     ### Features:
-    - 📝 Store user context data
-    - 🧠 AI-powered context enrichment
-    - 💡 Intelligent recommendations
+    - 📝 Store workflow context (repos, tickets, files)
+    - 🎯 Multi-level context (global, project, ticket)
+    - 🤖 AI agent coordination (Claude, AWS Q, OpenCase)
     - 📊 Analytics tracking
-    - 🔍 Context retrieval
+    - 🔍 Context retrieval and discovery
 
     ### Endpoints:
-    - `POST /api/context` - Store new context
+    - `POST /api/context` - Store workflow context
     - `GET /api/context/{context_id}` - Retrieve specific context
     - `GET /api/contexts/user/{user_id}` - Get user's contexts
     - `GET /api/health` - Health check

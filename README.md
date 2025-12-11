@@ -1,14 +1,14 @@
 # Context API - Unify AI
 
-A FastAPI service for storing and enriching user context data with AI-powered insights and recommendations.
+A FastAPI service for managing workflow context data for AI agents, code repositories, and ticket workflows. This API serves as the foundation for the Context Plane - a knowledge base that enables AI agents to access relevant contextual information.
 
 ## Features
 
-- **Context Storage**: Store user interaction context data
-- **AI Enrichment**: Automatically analyze and enrich context with AI
-- **Smart Recommendations**: Generate intelligent recommendations
-- **Analytics**: Track API usage and context metrics
-- **Context Retrieval**: Query contexts by ID or user
+- **Workflow Context Storage**: Store context for repos, tickets, and AI agent coordination
+- **Multi-Level Context**: Support for global, project, and ticket-level context
+- **Context Retrieval**: Query contexts by ID, user, or workflow
+- **Analytics Tracking**: Monitor context usage and patterns
+- **AI Agent Integration**: Enable Claude, AWS Q, and other AI tools to access context
 - **Auto-generated API Documentation**: Interactive Swagger/ReDoc documentation
 
 ## Tech Stack
@@ -107,66 +107,9 @@ The API will be available at:
 
 ## API Endpoints
 
-### Slack Context (Conversational)
+### Store Context
 ```http
-POST /api/context/slack
-```
-
-Store Slack bot conversation context with AI enrichment.
-
-**Request Body:**
-```json
-{
-  "userId": "user123",
-  "sessionId": "channel_general",
-  "appContext": {
-    "appName": "SlackBot",
-    "channel": "general",
-    "threadTs": "1234567890.123456"
-  },
-  "conversationHistory": [
-    {
-      "role": "user",
-      "message": "What are your business hours?",
-      "timestamp": "2024-12-09T10:00:00Z"
-    }
-  ],
-  "userPreferences": {
-    "language": "en",
-    "notifications": true
-  },
-  "deviceInfo": {
-    "platform": "slack"
-  },
-  "timestamp": "2024-12-09T10:00:00Z"
-}
-```
-
-**Response:**
-```json
-{
-  "status": "success",
-  "contextId": "ctx_slack_abc123",
-  "enrichedContext": {
-    "summary": "User asking about business hours",
-    "keyTopics": ["hours", "availability"],
-    "userIntent": "information_request",
-    "sentimentAnalysis": {
-      "sentiment": "neutral",
-      "confidence": 0.85
-    }
-  },
-  "recommendations": [
-    "Provide business hours",
-    "Respond in en language"
-  ],
-  "message": "Slack context successfully stored and enriched"
-}
-```
-
-### Unify Context (Workflow)
-```http
-POST /api/context/unify
+POST /api/context
 ```
 
 Store Unify AI workflow context for code repositories and tickets.
@@ -197,14 +140,20 @@ Store Unify AI workflow context for code repositories and tickets.
 ```json
 {
   "status": "success",
-  "contextId": "ctx_unify_xyz789",
+  "contextId": "ctx_xyz789",
   "details": "Context captured for ticket JIRA-1234 in repo repo_abc123",
   "userAlert": "AI agents are now aware of your JIRA-1234 context",
   "file": {
     "count": 1,
-    "files": [...]
+    "files": [
+      {
+        "path": "src/auth/login.py",
+        "type": "python",
+        "action": "modified"
+      }
+    ]
   },
-  "message": "Unify workflow context successfully stored"
+  "message": "Workflow context successfully stored"
 }
 ```
 
@@ -236,21 +185,8 @@ pytest --cov=api tests/
 ## Example Usage with cURL
 
 ```bash
-# Store Slack context
-curl -X POST http://localhost:8000/api/context/slack \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user123",
-    "sessionId": "channel_general",
-    "appContext": {"appName": "SlackBot", "channel": "general"},
-    "conversationHistory": [{"role": "user", "message": "Hello", "timestamp": "2024-12-09T10:00:00Z"}],
-    "userPreferences": {"language": "en"},
-    "deviceInfo": {"platform": "slack"},
-    "timestamp": "2024-12-09T10:00:00Z"
-  }'
-
-# Store Unify context
-curl -X POST http://localhost:8000/api/context/unify \
+# Store context
+curl -X POST http://localhost:8000/api/context \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "developer123",
@@ -260,16 +196,16 @@ curl -X POST http://localhost:8000/api/context/unify \
     "ticketID": "JIRA-1234",
     "contextLevel": "ticket",
     "AI_Client_type": ["Claude", "AWSQ"],
-    "details": "Fixing authentication bug",
-    "files": [{"path": "src/auth/login.py", "type": "python"}],
+    "details": "I am trying to fix the authentication bug in the login module",
+    "files": [{"path": "src/auth/login.py", "type": "python", "action": "modified"}],
     "timestamp": "2024-12-09T10:00:00Z"
   }'
 
-# Retrieve context
-curl http://localhost:8000/api/context/ctx_slack_abc123
+# Retrieve specific context
+curl http://localhost:8000/api/context/ctx_xyz789
 
-# Get user contexts
-curl http://localhost:8000/api/contexts/user/user123?limit=5
+# Get all contexts for a user
+curl http://localhost:8000/api/contexts/user/developer123?limit=10
 ```
 
 ## Example Usage with Python
@@ -278,24 +214,25 @@ curl http://localhost:8000/api/contexts/user/user123?limit=5
 import requests
 from datetime import datetime
 
-# Store context
+# Store workflow context
 response = requests.post(
     "http://localhost:8000/api/context",
     json={
-        "userId": "user123",
-        "sessionId": "session456",
-        "appContext": {"appName": "MyApp"},
-        "conversationHistory": [
+        "userId": "developer123",
+        "sessionId": "work_session_456",
+        "repoID": "repo_abc123",
+        "catalogID": "unify_map",
+        "ticketID": "JIRA-1234",
+        "contextLevel": "ticket",
+        "AI_Client_type": ["Claude", "AWSQ"],
+        "details": "I am trying to fix the authentication bug in the login module",
+        "files": [
             {
-                "role": "user",
-                "message": "Hello",
-                "timestamp": datetime.utcnow().isoformat()
+                "path": "src/auth/login.py",
+                "type": "python",
+                "action": "modified"
             }
         ],
-        "userPreferences": {"theme": "dark"},
-        "deviceInfo": {"platform": "web"},
-        "activityLog": [],
-        "location": {"country": "US"},
         "timestamp": datetime.utcnow().isoformat()
     }
 )
@@ -303,7 +240,12 @@ response = requests.post(
 result = response.json()
 context_id = result["contextId"]
 print(f"Stored context: {context_id}")
-print(f"Recommendations: {result['recommendations']}")
+print(f"Details: {result['details']}")
+print(f"User Alert: {result.get('userAlert')}")
+
+# Retrieve the stored context
+context = requests.get(f"http://localhost:8000/api/context/{context_id}")
+print(f"Retrieved context: {context.json()}")
 ```
 
 ## Configuration

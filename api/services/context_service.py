@@ -5,16 +5,12 @@ import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from api.models.context import UserContext, ContextAnalytics, ContextTypeEnum
-from api.schemas.context_schema import (
-    ContextRequest, ContextResponse, EnrichedContext,
-    SlackContextRequest, SlackContextResponse,
-    UnifyContextRequest, UnifyContextResponse
-)
+from api.models.context import UserContext, ContextAnalytics
+from api.schemas.context_schema import ContextRequest, ContextResponse
 
 
 class ContextService:
-    """Service for handling context operations"""
+    """Service for handling workflow context operations"""
 
     def __init__(self, db: Session):
         self.db = db
@@ -23,80 +19,29 @@ class ContextService:
         """Generate a unique context ID"""
         return f"ctx_{uuid.uuid4().hex[:12]}"
 
-    def enrich_context(self, context_data: ContextRequest) -> EnrichedContext:
-        """
-        Enrich the context with AI analysis
-
-        In production, this would call an AI service for:
-        - Summarization
-        - Topic extraction
-        - Intent detection
-        - Sentiment analysis
-        """
-        # Simple mock enrichment - replace with actual AI service
-        summary = f"User {context_data.userId} interaction in session {context_data.sessionId}"
-
-        # Extract key topics from conversation history
-        key_topics = []
-        if context_data.conversationHistory:
-            # In production, use NLP to extract topics
-            key_topics = ["conversation", "interaction"]
-
-        # Detect user intent
-        user_intent = "general_inquiry"
-        if context_data.conversationHistory:
-            # In production, use intent classification model
-            user_intent = "conversation_started"
-
-        # Sentiment analysis
-        sentiment_analysis = {
-            "sentiment": "neutral",
-            "confidence": 0.75
-        }
-
-        return EnrichedContext(
-            summary=summary,
-            keyTopics=key_topics,
-            userIntent=user_intent,
-            sentimentAnalysis=sentiment_analysis
-        )
-
-    def generate_recommendations(self, context_data: ContextRequest, enriched: EnrichedContext) -> list[str]:
-        """
-        Generate AI-powered recommendations
-
-        In production, this would use ML models to provide contextual recommendations
-        """
-        recommendations = []
-
-        # Mock recommendations based on context
-        if enriched.userIntent == "conversation_started":
-            recommendations.append("Greet the user warmly")
-            recommendations.append("Ask how you can help")
-
-        if context_data.userPreferences.get("language"):
-            lang = context_data.userPreferences["language"]
-            recommendations.append(f"Respond in {lang} language")
-
-        return recommendations
-
     def store_context(self, context_data: ContextRequest) -> ContextResponse:
-        """Store context data and return enriched response"""
+        """Store workflow context data (per ContextPLTC spec)"""
         try:
             # Generate unique context ID
             context_id = self.generate_context_id()
+
+            # Prepare context_data JSONB
+            context_json = {
+                "repoID": context_data.repoID,
+                "catalogID": context_data.catalogID,
+                "ticketID": context_data.ticketID,
+                "contextLevel": context_data.contextLevel,
+                "AI_Client_type": context_data.AI_Client_type,
+                "details": context_data.details,
+                "files": context_data.files or []
+            }
 
             # Create context record
             user_context = UserContext(
                 context_id=context_id,
                 user_id=context_data.userId,
                 session_id=context_data.sessionId,
-                app_context=context_data.appContext or {},
-                conversation_history=context_data.conversationHistory or [],
-                user_preferences=context_data.userPreferences or {},
-                device_info=context_data.deviceInfo or {},
-                activity_log=context_data.activityLog or [],
-                location=context_data.location or {},
+                context_data=context_json,
                 timestamp=context_data.timestamp
             )
 
@@ -105,24 +50,37 @@ class ContextService:
             self.db.commit()
             self.db.refresh(user_context)
 
-            # Enrich context with AI analysis
-            enriched_context = self.enrich_context(context_data)
+            # Generate response per ContextPLTC spec
+            details = f"Context captured for ticket {context_data.ticketID} in repo {context_data.repoID}"
 
-            # Generate recommendations
-            recommendations = self.generate_recommendations(context_data, enriched_context)
+            # Check for alerts (mock logic - in production, check for conflicts/issues)
+            user_alert = None
+            if context_data.contextLevel == "ticket":
+                user_alert = f"AI agents are now aware of your {context_data.ticketID} context"
+
+            # File tracking
+            file_info = None
+            if context_data.files:
+                file_info = {
+                    "count": len(context_data.files),
+                    "files": context_data.files
+                }
 
             # Log analytics event
             self._log_analytics_event(context_id, "context_stored", {
                 "user_id": context_data.userId,
-                "session_id": context_data.sessionId
+                "repo_id": context_data.repoID,
+                "ticket_id": context_data.ticketID,
+                "context_level": context_data.contextLevel
             })
 
             return ContextResponse(
                 status="success",
                 contextId=context_id,
-                enrichedContext=enriched_context,
-                recommendations=recommendations,
-                message="Context successfully stored and enriched"
+                details=details,
+                userAlert=user_alert,
+                file=file_info,
+                message="Workflow context successfully stored"
             )
 
         except Exception as e:
@@ -161,131 +119,3 @@ class ContextService:
             # Don't fail the main operation if analytics logging fails
             self.db.rollback()
             print(f"Analytics logging failed: {e}")
-
-    # ============ SLACK CONTEXT METHODS ============
-
-    def store_slack_context(self, context_data: SlackContextRequest) -> SlackContextResponse:
-        """Store Slack conversational context data"""
-        try:
-            # Generate unique context ID
-            context_id = f"ctx_slack_{uuid.uuid4().hex[:12]}"
-
-            # Prepare slack_data JSONB
-            slack_data = {
-                "appContext": context_data.appContext or {},
-                "conversationHistory": context_data.conversationHistory or [],
-                "userPreferences": context_data.userPreferences or {},
-                "deviceInfo": context_data.deviceInfo or {},
-                "activityLog": context_data.activityLog or [],
-                "location": context_data.location or {}
-            }
-
-            # Create context record
-            user_context = UserContext(
-                context_id=context_id,
-                context_type=ContextTypeEnum.SLACK,
-                user_id=context_data.userId,
-                session_id=context_data.sessionId,
-                slack_data=slack_data,
-                timestamp=context_data.timestamp
-            )
-
-            # Save to database
-            self.db.add(user_context)
-            self.db.commit()
-            self.db.refresh(user_context)
-
-            # Enrich context with AI analysis
-            enriched_context = self.enrich_context(context_data)
-
-            # Generate recommendations
-            recommendations = self.generate_recommendations(context_data, enriched_context)
-
-            # Log analytics event
-            self._log_analytics_event(context_id, "slack_context_stored", {
-                "user_id": context_data.userId,
-                "session_id": context_data.sessionId
-            })
-
-            return SlackContextResponse(
-                status="success",
-                contextId=context_id,
-                enrichedContext=enriched_context,
-                recommendations=recommendations,
-                message="Slack context successfully stored and enriched"
-            )
-
-        except Exception as e:
-            self.db.rollback()
-            raise e
-
-    # ============ UNIFY CONTEXT METHODS ============
-
-    def store_unify_context(self, context_data: UnifyContextRequest) -> UnifyContextResponse:
-        """Store Unify workflow context data"""
-        try:
-            # Generate unique context ID
-            context_id = f"ctx_unify_{uuid.uuid4().hex[:12]}"
-
-            # Prepare unify_data JSONB
-            unify_data = {
-                "repoID": context_data.repoID,
-                "catalogID": context_data.catalogID,
-                "ticketID": context_data.ticketID,
-                "contextLevel": context_data.contextLevel,
-                "AI_Client_type": context_data.AI_Client_type,
-                "details": context_data.details,
-                "files": context_data.files or []
-            }
-
-            # Create context record
-            user_context = UserContext(
-                context_id=context_id,
-                context_type=ContextTypeEnum.UNIFY,
-                user_id=context_data.userId,
-                session_id=context_data.sessionId,
-                unify_data=unify_data,
-                timestamp=context_data.timestamp
-            )
-
-            # Save to database
-            self.db.add(user_context)
-            self.db.commit()
-            self.db.refresh(user_context)
-
-            # Generate response per ContextPLTC spec
-            details = f"Context captured for ticket {context_data.ticketID} in repo {context_data.repoID}"
-
-            # Check for alerts (mock logic - in production, check for conflicts/issues)
-            user_alert = None
-            if context_data.contextLevel == "ticket":
-                user_alert = f"AI agents are now aware of your {context_data.ticketID} context"
-
-            # File tracking
-            file_info = None
-            if context_data.files:
-                file_info = {
-                    "count": len(context_data.files),
-                    "files": context_data.files
-                }
-
-            # Log analytics event
-            self._log_analytics_event(context_id, "unify_context_stored", {
-                "user_id": context_data.userId,
-                "repo_id": context_data.repoID,
-                "ticket_id": context_data.ticketID,
-                "context_level": context_data.contextLevel
-            })
-
-            return UnifyContextResponse(
-                status="success",
-                contextId=context_id,
-                details=details,
-                userAlert=user_alert,
-                file=file_info,
-                message="Unify workflow context successfully stored"
-            )
-
-        except Exception as e:
-            self.db.rollback()
-            raise e
