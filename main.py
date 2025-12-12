@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config.settings import settings
 from config.database import check_db_connection, init_db
-from api.routes import context_api
+from api.routes import context_api, skill_routes
 import logging
 
 # Configure logging
@@ -26,11 +26,11 @@ app = FastAPI(
     that manages workflow context for AI agents, code repositories, and ticket workflows.
 
     ### Features:
-    - 📝 Store workflow context (repos, tickets, files)
-    - 🎯 Multi-level context (global, project, ticket)
-    - 🤖 AI agent coordination (Claude, AWS Q, OpenCase)
-    - 📊 Analytics tracking
-    - 🔍 Context retrieval and discovery
+    - Store workflow context (repos, tickets, files)
+    - Multi-level context (global, project, ticket)
+    - AI agent coordination (Claude, AWS Q, OpenCase)
+    - Analytics tracking
+    - Context retrieval and discovery
 
     ### Endpoints:
     - `POST /api/context` - Store workflow context
@@ -53,6 +53,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(context_api.router)
+app.include_router(skill_routes.router)
 
 
 @app.on_event("startup")
