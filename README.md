@@ -137,9 +137,30 @@ Store Unify AI workflow context for code repositories and tickets.
       "action": "modified"
     }
   ],
+  "conversationHistory": [
+    {
+      "role": "user",
+      "aiClient": "Claude",
+      "message": "Can you help me debug the authentication issue?",
+      "timestamp": "2024-12-09T09:55:00Z"
+    },
+    {
+      "role": "assistant",
+      "aiClient": "Claude",
+      "message": "I'll help you investigate the login.py file.",
+      "timestamp": "2024-12-09T09:56:00Z"
+    }
+  ],
+  "status": "in_progress",
+  "blockedBy": null,
   "timestamp": "2024-12-09T10:00:00Z"
 }
 ```
+
+**New Fields (Optional):**
+- `conversationHistory`: Array of dialogue between user and AI agents - enables AI handoff and context preservation
+- `status`: Workflow status (`not_started`, `in_progress`, `blocked`, `needs_review`, `completed`)
+- `blockedBy`: Ticket ID or reason if status is "blocked"
 
 **Response:**
 ```json
@@ -185,6 +206,7 @@ Search and discover contexts with flexible filtering. This is the primary endpoi
 - `filePath`: Search by file path (partial match supported)
 - `contextLevel`: Filter by level (global, project, ticket)
 - `aiClient`: Filter by AI client type (Claude, AWSQ, etc.)
+- `status`: Filter by workflow status (not_started, in_progress, blocked, needs_review, completed)
 - `query`: Text search in details field
 - `limit`: Maximum results (1-100, default 10)
 
@@ -263,6 +285,10 @@ curl "http://localhost:8000/api/contexts/search?query=authentication&contextLeve
 
 # Search by file path
 curl "http://localhost:8000/api/contexts/search?filePath=src/auth/login.py"
+
+# Search by workflow status
+curl "http://localhost:8000/api/contexts/search?status=blocked"
+curl "http://localhost:8000/api/contexts/search?status=in_progress&repoID=repo_abc123"
 
 # Get all contexts for a repository
 curl http://localhost:8000/api/contexts/repo/repo_abc123

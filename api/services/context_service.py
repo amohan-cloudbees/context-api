@@ -33,7 +33,10 @@ class ContextService:
                 "contextLevel": context_data.contextLevel,
                 "AI_Client_type": context_data.AI_Client_type,
                 "details": context_data.details,
-                "files": context_data.files or []
+                "files": context_data.files or [],
+                "conversationHistory": context_data.conversationHistory or [],
+                "status": context_data.status or "in_progress",
+                "blockedBy": context_data.blockedBy
             }
 
             # Create context record
@@ -130,6 +133,7 @@ class ContextService:
         context_level: Optional[str] = None,
         ai_client: Optional[str] = None,
         query_text: Optional[str] = None,
+        status: Optional[str] = None,
         limit: int = 10
     ) -> list[Dict[str, Any]]:
         """
@@ -163,6 +167,12 @@ class ContextService:
         if ai_client:
             query = query.filter(
                 UserContext.context_data['AI_Client_type'].astext.contains(ai_client)
+            )
+
+        # Filter by status
+        if status:
+            query = query.filter(
+                UserContext.context_data['status'].astext == status
             )
 
         # Text search in details field
