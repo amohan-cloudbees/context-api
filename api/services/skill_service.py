@@ -22,37 +22,38 @@ class SkillService:
         """
         Get list of skills from local skills directory
 
-        Returns list of skill names (without .md extension)
+        Returns list of skill names (directory names)
         """
         if not self.skills_dir.exists():
             raise Exception(f"Skills directory not found: {self.skills_dir}")
 
-        skill_files = []
-        for file_path in self.skills_dir.glob("*.md"):
-            skill_files.append(file_path.stem)  # Get filename without extension
+        skill_dirs = []
+        for item in self.skills_dir.iterdir():
+            if item.is_dir() and not item.name.startswith('.'):
+                skill_dirs.append(item.name)
 
-        return skill_files
+        return skill_dirs
 
     def read_skill_markdown(self, skill_name: str) -> str:
         """
-        Read skill markdown content from local file
+        Read SKILL.md content from skill directory
 
         Args:
-            skill_name: Name of the skill (without .md extension)
+            skill_name: Name of the skill directory
 
         Returns:
             Markdown content as string
         """
-        skill_file = self.skills_dir / f"{skill_name}.md"
+        skill_file = self.skills_dir / skill_name / "SKILL.md"
 
         if not skill_file.exists():
-            raise Exception(f"Skill file not found: {skill_file}")
+            raise Exception(f"SKILL.md not found in {skill_name}/ directory")
 
         try:
             with open(skill_file, 'r', encoding='utf-8') as f:
                 return f.read()
         except Exception as e:
-            raise Exception(f"Failed to read skill file {skill_name}: {str(e)}")
+            raise Exception(f"Failed to read SKILL.md for {skill_name}: {str(e)}")
 
     def parse_skill_markdown(self, markdown_content: str, skill_id: str) -> Dict[str, Any]:
         """
