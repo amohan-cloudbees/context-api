@@ -1,8 +1,8 @@
 """
 Business logic for Skills API (Context Artifact Type 1: Agent Profile Documents)
 """
-import re
-import requests
+import os
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -13,83 +13,46 @@ from api.schemas.skill_schema import SkillIngestionRequest, IngestionResponse
 class SkillService:
     """Service for handling skills/agent profiles operations"""
 
-    # Skills to include (engineering-related)
-    INCLUDED_SKILLS = {
-        'doc-coauthoring', 'docx', 'frontend-design', 'mcp-builder',
-        'pdf', 'skill-creator', 'web-artifacts-builder', 'webapp-testing',
-        'xlsx', 'internal-comms', 'pptx'
-    }
-
-    # Skills to exclude (creative/non-engineering)
-    EXCLUDED_SKILLS = {
-        'algorithmic-art', 'brand-guidelines', 'canvas-design',
-        'slack-gif-creator', 'theme-factory'
-    }
-
     def __init__(self, db: Session):
         self.db = db
-        self.github_api = "https://api.github.com"
-        self.skills_repo = "anthropics/skills"
+        # Path to local skills directory
+        self.skills_dir = Path(__file__).parent.parent.parent / "skills"
 
-    def should_ingest_skill(self, skill_name: str) -> bool:
+    def get_local_skills(self) -> List[str]:
         """
-        Determine if a skill should be ingested based on engineering relevance
+        Get list of skills from local skills directory
 
-        Returns True if skill is engineering-related, False otherwise
+        Returns list of skill names (without .md extension)
         """
-        return skill_name in self.INCLUDED_SKILLS
+        if not self.skills_dir.exists():
+            raise Exception(f"Skills directory not found: {self.skills_dir}")
 
-    def fetch_anthropic_skills(self) -> List[Dict[str, Any]]:
+        skill_files = []
+        for file_path in self.skills_dir.glob("*.md"):
+            skill_files.append(file_path.stem)  # Get filename without extension
+
+        return skill_files
+
+    def read_skill_markdown(self, skill_name: str) -> str:
         """
-        Fetch list of skills from Anthropic's skills GitHub repository
-
-        Returns list of skill directories from the repo
-        """
-        url = f"{self.github_api}/repos/{self.skills_repo}/contents/skills"
-
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-
-            contents = response.json()
-
-            # Filter to only directories (actual skills)
-            skill_dirs = [
-                item for item in contents
-                if item['type'] == 'dir' and self.should_ingest_skill(item['name'])
-            ]
-
-            return skill_dirs
-
-        except requests.RequestException as e:
-            raise Exception(f"Failed to fetch skills from GitHub: {str(e)}")
-
-    def fetch_skill_markdown(self, skill_name: str) -> str:
-        """
-        Fetch the SKILL.md content for a specific skill
+        Read skill markdown content from local file
 
         Args:
-            skill_name: Name of the skill directory
+            skill_name: Name of the skill (without .md extension)
 
         Returns:
             Markdown content as string
         """
-        url = f"{self.github_api}/repos/{self.skills_repo}/contents/skills/{skill_name}/SKILL.md"
+        skill_file = self.skills_dir / f"{skill_name}.md"
+
+        if not skill_file.exists():
+            raise Exception(f"Skill file not found: {skill_file}")
 
         try:
-            response = requests.get(url)
-            response.raise_for_status()
-
-            data = response.json()
-
-            # GitHub API returns base64 encoded content
-            import base64
-            content = base64.b64decode(data['content']).decode('utf-8')
-
-            return content
-
-        except requests.RequestException as e:
-            raise Exception(f"Failed to fetch skill.md for {skill_name}: {str(e)}")
+            with open(skill_file, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            raise Exception(f"Failed to read skill file {skill_name}: {str(e)}")
 
     def parse_skill_markdown(self, markdown_content: str, skill_id: str) -> Dict[str, Any]:
         """
@@ -222,16 +185,15 @@ class SkillService:
             self.db.rollback()
             raise e
 
-    def ingest_anthropic_skills(self) -> IngestionResponse:
+    def ingest_local_skills(self) -> IngestionResponse:
         """
-        Main ingestion method: Fetch and store all Anthropic skills
+        Main ingestion method: Load and store all skills from local directory
 
         This orchestrates the full ingestion process:
-        1. Fetch skill list from GitHub
-        2. For each skill, fetch its markdown content
+        1. Get skill list from local skills/ directory
+        2. For each skill, read its markdown content
         3. Parse the markdown
-        4. Filter based on engineering relevance
-        5. Store in database
+        4. Store in database
 
         Returns:
             IngestionResponse with statistics and details
@@ -241,22 +203,20 @@ class SkillService:
         details = []
 
         try:
-            # Fetch list of skills from GitHub
-            skill_dirs = self.fetch_anthropic_skills()
+            # Get list of skills from local directory
+            skill_names = self.get_local_skills()
 
             # Process each skill
-            for skill_dir in skill_dirs:
-                skill_name = skill_dir['name']
-
+            for skill_name in skill_names:
                 try:
-                    # Fetch markdown content
-                    markdown_content = self.fetch_skill_markdown(skill_name)
+                    # Read markdown content
+                    markdown_content = self.read_skill_markdown(skill_name)
 
                     # Parse skill data
                     skill_data = self.parse_skill_markdown(markdown_content, skill_name)
 
                     # Generate source URL
-                    source_url = f"https://github.com/{self.skills_repo}/tree/main/skills/{skill_name}"
+                    source_url = f"https://github.com/anthropics/skills/tree/main/skills/{skill_name}"
 
                     # Ingest skill
                     if self.ingest_skill(skill_data, source_url):
@@ -270,13 +230,9 @@ class SkillService:
                     skipped_count += 1
                     details.append(f"Failed: {skill_name} - {str(e)}")
 
-            # Add info about excluded skills
-            for excluded in self.EXCLUDED_SKILLS:
-                details.append(f"Filtered out: {excluded} (not engineering-related)")
-
             return IngestionResponse(
                 status="success",
-                message=f"Successfully ingested {ingested_count} skills from Anthropic repository",
+                message=f"Successfully ingested {ingested_count} skills from local directory",
                 skillsIngested=ingested_count,
                 skillsSkipped=skipped_count,
                 details=details

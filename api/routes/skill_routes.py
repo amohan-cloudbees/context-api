@@ -26,31 +26,29 @@ router = APIRouter(prefix="/api/skills", tags=["Skills API"])
         500: {"description": "Ingestion failed"}
     }
 )
-async def ingest_anthropic_skills(db: Session = Depends(get_db)):
+async def ingest_local_skills(db: Session = Depends(get_db)):
     """
-    Ingest skills from Anthropic's skills GitHub repository
+    Ingest skills from local skills directory
 
     This endpoint:
-    - Fetches skills from https://github.com/anthropics/skills
-    - Filters to include only engineering-related skills
+    - Reads skill markdown files from the skills/ directory
     - Parses markdown content to extract title, description, category, tags
     - Stores skills in the database
 
-    **Filtering Logic:**
-    - Includes: doc-coauthoring, docx, frontend-design, mcp-builder, pdf, skill-creator,
+    **Available Skills:**
+    - doc-coauthoring, docx, frontend-design, mcp-builder, pdf, skill-creator,
       web-artifacts-builder, webapp-testing, xlsx, internal-comms, pptx
-    - Excludes: algorithmic-art, brand-guidelines, canvas-design, slack-gif-creator, theme-factory
 
     **Response:**
     - status: Operation status
     - message: Summary message
     - skillsIngested: Number of skills successfully ingested
-    - skillsSkipped: Number of skills skipped (already exist or filtered out)
+    - skillsSkipped: Number of skills skipped (already exist)
     - details: Array of detailed ingestion results
     """
     try:
         service = SkillService(db)
-        result = service.ingest_anthropic_skills()
+        result = service.ingest_local_skills()
         return result
 
     except Exception as e:
