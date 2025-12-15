@@ -1,7 +1,7 @@
 """
 Database model for Skills/Agent Profiles
 """
-from sqlalchemy import Column, String, TIMESTAMP, Text, ARRAY
+from sqlalchemy import Column, String, TIMESTAMP, Text, ARRAY, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import text
 from datetime import datetime
@@ -21,6 +21,12 @@ class Skill(Base):
     tags = Column(ARRAY(String))  # Searchable tags
     source = Column(String(50), default='anthropic')  # 'anthropic', 'custom', etc.
     source_url = Column(String(500))  # GitHub URL
+    version = Column(String(50), default='1.0.0', index=True)  # Semantic version
+    visibility_scope = Column(String(20), default='organization', index=True)  # private, team, organization, global
+    maintainer = Column(String(255), index=True)  # Team or individual maintaining the skill
+    usage_count = Column(Integer, default=0)  # Number of times skill has been activated
+    changelog_url = Column(String(500))  # URL to changelog documentation
+    install_url = Column(String(500))  # URL for installing/viewing the skill
     created_at = Column(TIMESTAMP, default=datetime.utcnow, index=True)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -36,6 +42,12 @@ class Skill(Base):
             "tags": self.tags or [],
             "source": self.source,
             "sourceUrl": self.source_url,
+            "version": self.version,
+            "visibilityScope": self.visibility_scope,
+            "maintainer": self.maintainer,
+            "usageCount": self.usage_count,
+            "changelogUrl": self.changelog_url,
+            "installUrl": self.install_url,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None
         }
