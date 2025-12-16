@@ -1,0 +1,35 @@
+{
+  "contextPlane": {
+    "enabled": true,
+    "apiEndpoint": "http://localhost:8000",
+    "notifications": {
+      "sessionStart": true,
+      "runtimeSuggestions": true,
+      "skillModifications": true
+    }
+  },
+  "hooks": {
+    "sessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/context_plane_session_start.sh"
+          }
+        ]
+      }
+    ],
+    "sessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/context_plane_session_end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
