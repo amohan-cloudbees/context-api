@@ -6,6 +6,7 @@ uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
 alembic==1.12.1
+pgvector==0.2.4
 
 # Pydantic for data validation
 pydantic==2.5.0
@@ -14,6 +15,9 @@ pydantic-settings==2.1.0
 # Python utilities
 python-dotenv==1.0.0
 python-multipart==0.0.6
+
+# AWS Services
+boto3==1.34.0
 
 # Development and testing
 pytest==7.4.3

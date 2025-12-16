@@ -6,16 +6,21 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from api.models.skill import Skill
 from api.models.user_skill import UserSkill
+from api.services.embedding_service import EmbeddingService
 from datetime import datetime
 from typing import List, Dict, Optional
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PreHookService:
     """Service for pre-hook operations"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, region_name: str = 'us-east-1'):
         self.db = db
+        self.embedding_service = EmbeddingService(region_name=region_name)
 
     def check_skill_updates(self, user_id: str, installed_skills: List[Dict], last_check: str):
         """
@@ -95,7 +100,7 @@ class PreHookService:
 
     def suggest_skills(self, user_prompt: str, context: Optional[Dict] = None):
         """
-        Suggest relevant skills based on user prompt (v1 - keyword matching)
+        Suggest relevant skills based on user prompt (v2 - semantic search with fallback)
 
         Args:
             user_prompt: User's task description
@@ -107,7 +112,53 @@ class PreHookService:
         # Get all skills
         all_skills = self.db.query(Skill).all()
 
-        # Simple keyword matching (v1)
+        # Try semantic search first (v2)
+        try:
+            logger.info("Using semantic search (v2) with Bedrock embeddings")
+
+            # Generate embedding for user prompt
+            query_embedding = self.embedding_service.generate_embedding(user_prompt)
+
+            if query_embedding:
+                # Filter skills that have embeddings
+                skills_with_embeddings = [
+                    (skill, skill.embedding)
+                    for skill in all_skills
+                    if skill.embedding
+                ]
+
+                if skills_with_embeddings:
+                    # Calculate similarities
+                    results = self.embedding_service.find_most_similar(
+                        query_embedding,
+                        skills_with_embeddings
+                    )
+
+                    # Convert to suggestions format
+                    suggestions = []
+                    for skill, similarity in results[:3]:  # Top 3
+                        if similarity > 0.5:  # Threshold for semantic similarity
+                            suggestions.append({
+                                "skillId": skill.skill_id,
+                                "confidence": round(similarity, 2),
+                                "reasoning": f"Semantic similarity score: {similarity:.2f} (using Bedrock Titan embeddings)",
+                                "skillMetadata": {
+                                    "name": skill.title,
+                                    "description": skill.description or "",
+                                    "category": skill.category or "general",
+                                    "capabilities": skill.tags or []
+                                }
+                            })
+
+                    if suggestions:
+                        logger.info(f"Semantic search found {len(suggestions)} suggestions")
+                        return {"suggestions": suggestions}
+
+        except Exception as e:
+            logger.warning(f"Semantic search failed, falling back to keyword matching: {e}")
+
+        # Fallback to keyword matching (v1)
+        logger.info("Using keyword matching (v1) as fallback")
         suggestions = []
 
         # Extract keywords from prompt

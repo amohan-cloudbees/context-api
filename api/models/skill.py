@@ -2,7 +2,7 @@
 Database model for Skills/Agent Profiles
 """
 from sqlalchemy import Column, String, TIMESTAMP, Text, ARRAY, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy import text
 from datetime import datetime
 from api.models.context import Base
@@ -27,6 +27,7 @@ class Skill(Base):
     usage_count = Column(Integer, default=0)  # Number of times skill has been activated
     changelog_url = Column(String(500))  # URL to changelog documentation
     install_url = Column(String(500))  # URL for installing/viewing the skill
+    embedding = Column(JSONB)  # Vector embedding for semantic search (1024-dim array)
     created_at = Column(TIMESTAMP, default=datetime.utcnow, index=True)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
