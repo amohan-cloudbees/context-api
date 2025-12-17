@@ -188,7 +188,24 @@ curl http://localhost:8000/api/skills | jq '.data[] | {name: .title, version: .v
 
 ### Setup Claude Code Integration
 
-To enable automatic skill discovery in Claude Code:
+**Required for full Context Plane functionality.** These commands provide the user interface for skill discovery and management.
+
+#### Automated Setup (Recommended)
+
+```bash
+cd hooks
+./setup_local_demo.sh
+```
+
+This script automatically:
+- Installs session hooks (`session_start.sh`, `session_end.sh`)
+- Installs slash commands (`/browse-skills`, `/check-skills`, `/suggest-skill`)
+- Creates skills directory and manifest
+- Sets up Claude Code configuration
+
+#### Manual Setup
+
+If you prefer manual installation:
 
 ```bash
 # 1. Copy session hooks to Claude Code hooks directory
@@ -198,11 +215,15 @@ cp hooks/context_plane_session_end.sh ~/.claude/hooks/
 chmod +x ~/.claude/hooks/context_plane_session_start.sh
 chmod +x ~/.claude/hooks/context_plane_session_end.sh
 
-# 2. Copy the Context Plane integration skill
+# 2. Copy slash commands (REQUIRED for Context Plane UI)
+mkdir -p ~/.claude/commands
+cp hooks/commands/*.md ~/.claude/commands/
+
+# 3. Copy the Context Plane integration skill
 mkdir -p ~/.claude/skills
 cp hooks/context-plane-integration.md ~/.claude/skills/
 
-# 3. Configure Claude Code settings
+# 4. Configure Claude Code settings
 # Add to ~/.claude/settings.json:
 {
   "hooks": {
@@ -211,13 +232,50 @@ cp hooks/context-plane-integration.md ~/.claude/skills/
   }
 }
 
-# 4. Set Context Plane API endpoint (optional, defaults to localhost:8000)
+# 5. Set Context Plane API endpoint (optional, defaults to localhost:8000)
 export CONTEXT_PLANE_API_ENDPOINT="http://localhost:8000"
 ```
 
+#### Available Slash Commands
+
+After setup, restart Claude Code and use these commands:
+
+- **`/browse-skills`** - Browse new skills you don't have installed
+  - Shows only skills you haven't installed yet
+  - Displays in formatted boxes following Pre-Hook specification
+  - Shows updates available for installed skills
+
+- **`/check-skills`** - Check for new skills and updates since last session
+  - Tracks your last check timestamp
+  - Shows new skills published since your last check
+  - Shows version updates for installed skills
+
+- **`/suggest-skill`** - Get AI-powered skill recommendations
+  - Describe your task in natural language
+  - Uses AWS Bedrock Titan semantic search
+  - Returns confidence scores and reasoning
+
+#### Verification
+
+After setup, verify installation:
+
+```bash
+# Check hooks are installed
+ls -la ~/.claude/hooks/
+
+# Check commands are installed
+ls -la ~/.claude/commands/
+
+# Check skills directory exists
+ls -la ~/.claude/skills/
+
+# Test API connectivity
+curl http://localhost:8000/api/health
+```
+
 Now when you start Claude Code, it will automatically check for new skills and you can use:
-- Natural language: "I need to test my web application" (Claude automatically queries Context Plane)
-- Slash commands: `/check-skills`, `/suggest-skill`, `/browse-skills`
+- **Slash commands**: `/browse-skills`, `/check-skills`, `/suggest-skill`
+- **Natural language**: "I need to test my web application" (Claude automatically queries Context Plane)
 
 ## API Endpoints
 
