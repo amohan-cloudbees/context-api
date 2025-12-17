@@ -28,6 +28,9 @@ cp "$SCRIPT_DIR/context_plane_session_end.sh" "$HOOKS_DIR/"
 chmod +x "$HOOKS_DIR/context_plane_session_start.sh"
 chmod +x "$HOOKS_DIR/context_plane_session_end.sh"
 
+echo "Installing Context Plane integration skill..."
+cp "$SCRIPT_DIR/context-plane-integration.md" "$SKILLS_DIR/"
+
 # Initialize skills manifest
 SKILLS_MANIFEST="$SKILLS_DIR/installed_skills.json"
 if [ ! -f "$SKILLS_MANIFEST" ]; then

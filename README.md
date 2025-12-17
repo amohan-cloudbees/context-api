@@ -1,27 +1,36 @@
-# Context API - Unify AI
+# Context Plane - CloudBees AI Knowledge Management
 
-A FastAPI service for managing workflow context data for AI agents, code repositories, and ticket workflows. This API serves as the foundation for the Context Plane - a knowledge base that enables AI agents to access relevant contextual information.
+A FastAPI service that enables AI agents like Claude Code to discover and execute organizational knowledge through intelligent skill discovery. Context Plane transforms static documentation into executable AI skills, ensuring every developer has access to best practices, tools, and workflows through natural language interaction.
 
 ## Features
 
-- **Workflow Context Storage**: Store context for repos, tickets, and AI agent coordination
+### Skills System (Primary Feature)
+- **AI Skills Catalog**: Centralized repository of AI agent profiles (skills) with semantic versioning
+- **Semantic Skill Discovery**: Natural language skill suggestions powered by AWS Bedrock Titan Embeddings
+- **Executable Skills**: Skills contain instructions, scripts, and resources for Claude to execute
+- **Version Management**: Track skill updates and notify users of new capabilities
+- **Skill Ingestion**: Automatically ingest skills from directories with embedding generation
+
+### Claude Code Integration
+- **Session Hooks**: Automatic skill update notifications on session start/end
+- **Natural Language Interface**: Users describe tasks; Claude automatically queries Context Plane
+- **Slash Commands**: `/check-skills`, `/suggest-skill`, `/browse-skills` for manual discovery
+- **Context Plane Integration Skill**: Teaches Claude to automatically query for relevant skills
+
+### Workflow Context Storage (Secondary Feature)
 - **Multi-Level Context**: Support for global, project, and ticket-level context
 - **Context Discovery & Search**: Flexible search API for AI agents to find relevant context
-  - Search by repository, ticket, file path
-  - Filter by context level and AI client type
-  - Full-text search in details field
-  - Optimized with PostgreSQL JSONB indexes
-- **Context Retrieval**: Query contexts by ID, user, or workflow
 - **Analytics Tracking**: Monitor context usage and patterns
-- **AI Agent Integration**: Enable Claude, AWS Q, and other AI tools to access context
 - **Auto-generated API Documentation**: Interactive Swagger/ReDoc documentation
 
 ## Tech Stack
 
 - **Framework**: FastAPI (Python 3.10+)
-- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Database**: PostgreSQL 14+ with SQLAlchemy ORM
+- **AI/ML**: AWS Bedrock Titan Embeddings (1024-dimensional vectors)
 - **Validation**: Pydantic v2
 - **Server**: Uvicorn (ASGI)
+- **Integration**: Claude Code (REST API + Session Hooks)
 
 ## Project Structure
 
@@ -29,16 +38,51 @@ A FastAPI service for managing workflow context data for AI agents, code reposit
 context-api/
 ├── api/
 │   ├── routes/          # API endpoints
+│   │   ├── context_api.py      # Context CRUD operations
+│   │   ├── skill_routes.py     # Skills management API
+│   │   └── prehook_routes.py   # Claude Code integration endpoints
 │   ├── models/          # Database models
-│   ├── schemas/         # Request/response schemas
+│   │   ├── context.py          # UserContext, ContextAnalytics
+│   │   ├── skill.py            # Skill model with embeddings
+│   │   └── user_skill.py       # User skill tracking
+│   ├── schemas/         # Pydantic validation schemas
 │   └── services/        # Business logic
+│       ├── context_service.py     # Context management
+│       ├── skill_service.py       # Skills ingestion & search
+│       ├── prehook_service.py     # Claude Code integration
+│       └── embedding_service.py   # AWS Bedrock integration
 ├── config/              # Configuration
+│   ├── database.py      # Database connection & session management
+│   └── settings.py      # Application configuration
 ├── database/            # Database migrations
+│   └── migrations/      # SQL migration files (001-010)
+├── hooks/               # Claude Code integration scripts
+│   ├── README.md
+│   ├── context_plane_session_start.sh
+│   ├── context_plane_session_end.sh
+│   ├── setup_local_demo.sh
+│   └── demo_workflow.sh
+├── skills/              # 13 skill directories with bundled resources
+│   ├── doc-coauthoring/
+│   ├── docx/
+│   ├── frontend-design/
+│   ├── internal-comms/
+│   ├── mcp-builder/
+│   ├── pdf/
+│   ├── pptx/
+│   ├── skill-creator/
+│   ├── web-artifacts-builder/
+│   ├── webapp-testing/
+│   ├── xlsx/
+│   └── lucky-number-context-plane-team/
+├── scripts/
+│   └── generate_skill_embeddings.py  # Bedrock embedding generation
 ├── analytics/           # Analytics tracking
 ├── tests/               # Unit tests
 ├── main.py              # Application entry point
 ├── requirements.txt     # Python dependencies
-└── .env.example         # Environment variables template
+├── .env.example         # Environment variables template
+└── PROJECT_SUMMARY.md   # Detailed project documentation
 ```
 
 ## Quick Start
@@ -46,8 +90,10 @@ context-api/
 ### Prerequisites
 
 - Python 3.10 or higher
-- PostgreSQL 12 or higher
+- PostgreSQL 14 or higher
 - pip (Python package manager)
+- AWS Account with Bedrock access (for semantic search)
+- Claude Code CLI (for integration features)
 
 ### Setup
 
@@ -91,8 +137,23 @@ cp .env.example .env
 # Option 1: Let FastAPI create tables automatically (development only)
 # Tables will be created on first run when DEBUG=true
 
-# Option 2: Run SQL migration manually
+# Option 2: Run SQL migrations manually (recommended for production)
 psql -U postgres -d context_db -f database/migrations/001_create_context_tables.sql
+psql -U postgres -d context_db -f database/migrations/005_add_skills_table.sql
+psql -U postgres -d context_db -f database/migrations/006_add_user_skills_table.sql
+# ... run remaining migrations as needed
+```
+
+### Configure AWS Bedrock (for Semantic Search)
+
+```bash
+# Set AWS credentials in .env file
+echo "AWS_REGION=us-east-1" >> .env
+echo "AWS_ACCESS_KEY_ID=your_access_key" >> .env
+echo "AWS_SECRET_ACCESS_KEY=your_secret_key" >> .env
+
+# Or use AWS CLI configuration
+aws configure
 ```
 
 ### Start the Server
@@ -110,9 +171,170 @@ The API will be available at:
 - **Interactive Docs**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
+### Ingest Skills into Database
+
+```bash
+# Ingest skills from the skills directory
+curl -X POST http://localhost:8000/api/skills/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"directory_path":"./skills"}'
+
+# Generate embeddings for semantic search
+python scripts/generate_skill_embeddings.py
+
+# Verify skills were ingested
+curl http://localhost:8000/api/skills | jq '.data[] | {name: .title, version: .version}'
+```
+
+### Setup Claude Code Integration
+
+To enable automatic skill discovery in Claude Code:
+
+```bash
+# 1. Copy session hooks to Claude Code hooks directory
+mkdir -p ~/.claude/hooks
+cp hooks/context_plane_session_start.sh ~/.claude/hooks/
+cp hooks/context_plane_session_end.sh ~/.claude/hooks/
+chmod +x ~/.claude/hooks/context_plane_session_start.sh
+chmod +x ~/.claude/hooks/context_plane_session_end.sh
+
+# 2. Copy the Context Plane integration skill
+mkdir -p ~/.claude/skills
+cp hooks/context-plane-integration.md ~/.claude/skills/
+
+# 3. Configure Claude Code settings
+# Add to ~/.claude/settings.json:
+{
+  "hooks": {
+    "session_start": "~/.claude/hooks/context_plane_session_start.sh",
+    "session_end": "~/.claude/hooks/context_plane_session_end.sh"
+  }
+}
+
+# 4. Set Context Plane API endpoint (optional, defaults to localhost:8000)
+export CONTEXT_PLANE_API_ENDPOINT="http://localhost:8000"
+```
+
+Now when you start Claude Code, it will automatically check for new skills and you can use:
+- Natural language: "I need to test my web application" (Claude automatically queries Context Plane)
+- Slash commands: `/check-skills`, `/suggest-skill`, `/browse-skills`
+
 ## API Endpoints
 
-### Store Context
+### Skills API
+
+#### List All Skills
+```http
+GET /api/skills
+```
+
+Returns all available skills with their metadata.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "count": 13,
+  "data": [
+    {
+      "id": "uuid",
+      "skill_id": "webapp-testing",
+      "title": "Web Application Testing",
+      "description": "Write native Python Playwright scripts for web testing",
+      "category": "testing",
+      "version": "1.0.0",
+      "tags": ["playwright", "testing", "e2e"]
+    }
+  ]
+}
+```
+
+#### Get Skill Suggestions (Semantic Search)
+```http
+POST /api/v1/skills/suggest
+```
+
+**Request Body:**
+```json
+{
+  "userPrompt": "help me test my web application",
+  "context": {}
+}
+```
+
+**Response:**
+```json
+{
+  "suggestions": [
+    {
+      "skillId": "webapp-testing",
+      "confidence": 0.73,
+      "reasoning": "Semantic similarity score using Bedrock Titan embeddings",
+      "skillMetadata": {
+        "name": "Web Application Testing",
+        "description": "Write native Python Playwright scripts",
+        "category": "testing",
+        "capabilities": ["playwright", "testing", "e2e"]
+      }
+    }
+  ]
+}
+```
+
+#### Check for Skill Updates
+```http
+GET /api/v1/skills/updates?user_id=demo_user&installed_skills=[...]&last_check=2025-01-01T00:00:00Z
+```
+
+Returns available updates for installed skills and new skills since last check.
+
+**Response:**
+```json
+{
+  "availableUpdates": [
+    {
+      "skillId": "webapp-testing",
+      "name": "Web Application Testing",
+      "currentVersion": "0.9.0",
+      "latestVersion": "1.0.0",
+      "category": "testing"
+    }
+  ],
+  "newSkills": [
+    {
+      "skillId": "mcp-builder",
+      "name": "MCP Server Development Guide",
+      "latestVersion": "1.0.0",
+      "category": "documentation"
+    }
+  ]
+}
+```
+
+#### Get Specific Skill
+```http
+GET /api/skills/{skill_id}
+```
+
+Returns complete skill details including markdown content.
+
+#### Ingest Skills
+```http
+POST /api/skills/ingest
+```
+
+**Request Body:**
+```json
+{
+  "directory_path": "./skills"
+}
+```
+
+Ingests all skills from the specified directory and generates embeddings.
+
+### Context API
+
+#### Store Context
 ```http
 POST /api/context
 ```
@@ -359,10 +581,13 @@ print(f"Ticket has {ticket_contexts.json()['count']} contexts")
 Edit `.env` file to configure:
 
 - `DATABASE_URL`: PostgreSQL connection string
-- `HOST` and `PORT`: Server binding
-- `DEBUG`: Enable debug mode
+- `HOST` and `PORT`: Server binding (default: 0.0.0.0:8000)
+- `DEBUG`: Enable debug mode (default: true for development)
 - `ALLOWED_ORIGINS`: CORS allowed origins
 - `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR)
+- `AWS_REGION`: AWS region for Bedrock (default: us-east-1)
+- `AWS_ACCESS_KEY_ID`: AWS access key (optional if using AWS CLI config)
+- `AWS_SECRET_ACCESS_KEY`: AWS secret key (optional if using AWS CLI config)
 
 ## Production Deployment
 
@@ -374,15 +599,57 @@ For production deployment:
 4. Add authentication/authorization
 5. Use environment-specific `.env` files
 
-## Future Enhancements
+## Current Features
 
-- Integrate real AI/ML models for enrichment
-- Add authentication (JWT, OAuth2)
-- Implement caching (Redis)
-- Add rate limiting
+✅ **Skills System** - AI agent profiles with semantic versioning
+✅ **Semantic Search** - AWS Bedrock Titan embeddings with cosine similarity
+✅ **Claude Code Integration** - Session hooks and natural language interface
+✅ **Version Management** - Track and notify skill updates
+✅ **Skill Ingestion** - Automatic ingestion from directories
+✅ **PostgreSQL Storage** - JSONB storage with embeddings
+✅ **REST API** - Complete CRUD operations
+✅ **Interactive Documentation** - Swagger UI and ReDoc
+
+## Roadmap
+
+### Phase 1 (Completed)
+- ✅ Skills catalog and management
+- ✅ Semantic skill discovery
+- ✅ Claude Code session hooks
+- ✅ Update notifications
+
+### Phase 2 (In Progress)
+- 🔄 Documentation context (runbooks, design docs, coding standards)
+- 🔄 Team collaboration features (skill sharing, ratings, reviews)
+- 🔄 Authentication (JWT, OAuth2)
+- 🔄 Enhanced analytics and usage metrics
+
+### Phase 3 (Planned)
+- SDLC state context (real-time project status, dependencies, blockers)
+- Slack AIFR integration
+- IDE plugins (VSCode, IntelliJ)
+- Caching layer (Redis)
+- Rate limiting
 - WebSocket support for real-time updates
 - Docker containerization
+- Kubernetes deployment
+
+## Architecture
+
+Context Plane follows a three-tier context architecture:
+
+1. **Skills (Context Type 1)** - AI agent profiles with executable instructions ✅ **IMPLEMENTED**
+2. **Documentation Context (Type 2)** - Organizational documentation and standards 🔄 **PLANNED**
+3. **SDLC State Context (Type 3)** - Real-time development state 🔄 **PLANNED**
+
+## Contributing
+
+Please read [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) for detailed project documentation.
 
 ## Support
 
 For issues or questions, please open an issue in the repository.
+
+## License
+
+Copyright © 2025 CloudBees, Inc.

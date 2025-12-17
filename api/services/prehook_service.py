@@ -44,9 +44,11 @@ class PreHookService:
         new_skills = []
 
         for skill in all_skills:
-            if skill.skill_id in installed_map:
+            # Use flexible matching to find installed version
+            current_version = self._find_installed_version(skill.skill_id, installed_map)
+
+            if current_version is not None:
                 # Check if there's an update
-                current_version = installed_map[skill.skill_id]
                 if self._compare_versions(skill.version, current_version) > 0:
                     available_updates.append({
                         "skillId": skill.skill_id,
@@ -334,3 +336,37 @@ class PreHookService:
             return f"User prompt mentions keywords that match this skill: {keywords_str}"
 
         return "This skill may be relevant to the user's task"
+
+    def _find_installed_version(self, skill_id: str, installed_map: Dict[str, str]) -> Optional[str]:
+        """
+        Find installed version of a skill with flexible matching
+
+        Handles cases where installed skills have maintainer suffixes:
+        - Database: "lucky-number"
+        - Installed: "lucky-number-context-plane-team"
+
+        Args:
+            skill_id: The skill ID to search for
+            installed_map: Dict mapping installed skill IDs to versions
+
+        Returns:
+            Version string if found, None otherwise
+        """
+        # Try exact match first
+        if skill_id in installed_map:
+            return installed_map[skill_id]
+
+        # Try prefix match: check if any installed skill starts with skill_id + "-"
+        # This handles: DB has "lucky-number", installed has "lucky-number-context-plane-team"
+        prefix = f"{skill_id}-"
+        for installed_id, version in installed_map.items():
+            if installed_id.startswith(prefix):
+                return version
+
+        # Try reverse: check if skill_id starts with any installed skill ID + "-"
+        # This handles case where installed might be shorter
+        for installed_id, version in installed_map.items():
+            if skill_id.startswith(f"{installed_id}-"):
+                return version
+
+        return None
