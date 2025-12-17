@@ -3,6 +3,7 @@ Main FastAPI application entry point
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from config.settings import settings
 from config.database import check_db_connection, init_db
 from api.routes import context_api, skill_routes, prehook_routes
@@ -14,6 +15,32 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown"""
+    # Startup
+    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+
+    # Check database connection
+    if check_db_connection():
+        logger.info("Database connection established")
+    else:
+        logger.error("Failed to connect to database")
+
+    # Initialize database tables (in production, use migrations)
+    if settings.DEBUG:
+        try:
+            init_db()
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+
+    yield
+
+    # Shutdown
+    logger.info(f"Shutting down {settings.APP_NAME}")
+
 
 # Create FastAPI application
 app = FastAPI(
@@ -39,7 +66,8 @@ app = FastAPI(
     - `GET /api/health` - Health check
     """,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -55,31 +83,6 @@ app.add_middleware(
 app.include_router(context_api.router)
 app.include_router(skill_routes.router)
 app.include_router(prehook_routes.router)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Run on application startup"""
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-
-    # Check database connection
-    if check_db_connection():
-        logger.info("Database connection established")
-    else:
-        logger.error("Failed to connect to database")
-
-    # Initialize database tables (in production, use migrations)
-    if settings.DEBUG:
-        try:
-            init_db()
-        except Exception as e:
-            logger.error(f"Database initialization failed: {e}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Run on application shutdown"""
-    logger.info(f"Shutting down {settings.APP_NAME}")
 
 
 @app.get("/")
