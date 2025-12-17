@@ -18,8 +18,26 @@ Then present the suggestions to the user showing:
 - Skill name and description
 - Confidence score (as a percentage)
 - Why this skill was suggested (the reasoning)
-- How they can use this skill
+- Installation status (✅ Installed / ⚠️ Not installed)
 
 If there are multiple suggestions, rank them by confidence score.
+
+**For skills that are NOT installed (`installed: false`):**
+- Inform the user the skill is not installed yet
+- Ask if they'd like to use it using the AskUserQuestion tool
+- If user confirms:
+  1. **Install for future sessions:**
+     ```bash
+     curl -s -X POST "http://localhost:8000/api/v1/skills/<SKILL_ID>/install?user_id=$(whoami)"
+     ```
+  2. **Fetch and use in current session:**
+     ```bash
+     curl -s "http://localhost:8000/api/skills/<SKILL_ID>"
+     ```
+  3. Read the `content` field from the response
+  4. Follow the skill instructions to complete the user's task immediately
+  5. No session restart needed - execute the skill in the current session
+
+**Important:** When a skill is not installed, always fetch it inline and execute it immediately. Don't tell the user to restart their session.
 
 Make the output helpful and encouraging. Explain what each skill does and how it could help with their task.

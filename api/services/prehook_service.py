@@ -11,6 +11,9 @@ from datetime import datetime
 from typing import List, Dict, Optional
 import re
 import logging
+import json
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,7 @@ class PreHookService:
     def __init__(self, db: Session, region_name: str = 'us-east-1'):
         self.db = db
         self.embedding_service = EmbeddingService(region_name=region_name)
+        self.skills_dir = Path.home() / ".claude" / "skills"
 
     def check_skill_updates(self, user_id: str, installed_skills: List[Dict], last_check: str):
         """
@@ -149,7 +153,8 @@ class PreHookService:
                                     "description": skill.description or "",
                                     "category": skill.category or "general",
                                     "capabilities": skill.tags or []
-                                }
+                                },
+                                "installed": self._is_skill_installed(skill.skill_id)
                             })
 
                     if suggestions:
@@ -183,7 +188,8 @@ class PreHookService:
                         "description": skill.description or "",
                         "category": skill.category or "general",
                         "capabilities": skill.tags or []
-                    }
+                    },
+                    "installed": self._is_skill_installed(skill.skill_id)
                 })
 
         # Sort by confidence descending
@@ -271,6 +277,86 @@ class PreHookService:
             "notifiedUsers": notified_count
         }
 
+    def install_skill(self, skill_id: str, user_id: str):
+        """
+        Install a skill to the user's local ~/.claude/skills directory
+
+        Args:
+            skill_id: The skill ID to install
+            user_id: User identifier
+
+        Returns:
+            Dict with status and installation info
+        """
+        # Get skill from database
+        skill = self.db.query(Skill).filter(Skill.skill_id == skill_id).first()
+
+        if not skill:
+            return {
+                "status": "error",
+                "message": f"Skill '{skill_id}' not found in database"
+            }
+
+        try:
+            # Determine home directory (supports both Unix and Windows)
+            home_dir = Path.home()
+            skills_dir = home_dir / ".claude" / "skills"
+
+            # Create skills directory if it doesn't exist
+            skills_dir.mkdir(parents=True, exist_ok=True)
+
+            # Write skill content to file
+            skill_file = skills_dir / f"{skill_id}.md"
+            skill_file.write_text(skill.content, encoding='utf-8')
+
+            # Update installed_skills.json
+            installed_skills_file = skills_dir / "installed_skills.json"
+
+            # Load existing installed skills or create new
+            if installed_skills_file.exists():
+                try:
+                    installed_data = json.loads(installed_skills_file.read_text(encoding='utf-8'))
+                except json.JSONDecodeError:
+                    installed_data = {"installedSkills": [], "lastUpdateCheck": "2000-01-01T00:00:00Z"}
+            else:
+                installed_data = {"installedSkills": [], "lastUpdateCheck": "2000-01-01T00:00:00Z"}
+
+            # Add or update skill in installed list
+            installed_list = installed_data.get("installedSkills", [])
+
+            # Remove existing entry if present
+            installed_list = [s for s in installed_list if s.get("skill_id") != skill_id]
+
+            # Add new entry
+            installed_list.append({
+                "skill_id": skill_id,
+                "version": skill.version,
+                "installed_at": datetime.utcnow().isoformat() + "Z"
+            })
+
+            installed_data["installedSkills"] = installed_list
+            installed_data["lastUpdateCheck"] = datetime.utcnow().isoformat() + "Z"
+
+            # Write updated installed_skills.json
+            installed_skills_file.write_text(json.dumps(installed_data, indent=2), encoding='utf-8')
+
+            logger.info(f"Installed skill '{skill_id}' for user '{user_id}'")
+
+            return {
+                "status": "success",
+                "message": f"Skill '{skill.title}' installed successfully",
+                "skillId": skill_id,
+                "version": skill.version,
+                "installedPath": str(skill_file)
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to install skill '{skill_id}': {e}")
+            return {
+                "status": "error",
+                "message": f"Failed to install skill: {str(e)}"
+            }
+
     def _compare_versions(self, version1: str, version2: str) -> int:
         """
         Compare two semantic versions
@@ -336,6 +422,19 @@ class PreHookService:
             return f"User prompt mentions keywords that match this skill: {keywords_str}"
 
         return "This skill may be relevant to the user's task"
+
+    def _is_skill_installed(self, skill_id: str) -> bool:
+        """
+        Check if a skill is installed locally
+
+        Args:
+            skill_id: The skill ID to check
+
+        Returns:
+            True if skill file exists in ~/.claude/skills/, False otherwise
+        """
+        skill_file = self.skills_dir / f"{skill_id}.md"
+        return skill_file.exists()
 
     def _find_installed_version(self, skill_id: str, installed_map: Dict[str, str]) -> Optional[str]:
         """

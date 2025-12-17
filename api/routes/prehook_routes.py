@@ -85,3 +85,37 @@ async def share_skill_modification(
     result = service.share_skill(share_data)
 
     return result
+
+
+@router.post("/{skill_id}/install")
+async def install_skill(
+    skill_id: str,
+    user_id: str = Query(..., description="User identifier"),
+    db: Session = Depends(get_db)
+):
+    """
+    Install a skill to the user's local ~/.claude/skills directory.
+
+    This endpoint:
+    - Fetches the skill content from the database
+    - Writes the skill to ~/.claude/skills/{skill_id}.md
+    - Updates ~/.claude/skills/installed_skills.json to track installed skills
+    - Makes the skill available to Claude Code's Skill tool
+
+    **Path Parameters:**
+    - skill_id: The ID of the skill to install (e.g., "lucky-number", "predict-lucky-number")
+
+    **Query Parameters:**
+    - user_id: User identifier
+
+    **Response:**
+    - status: "success" or "error"
+    - message: Human-readable result message
+    - skillId: The installed skill ID
+    - version: The installed version
+    - installedPath: Path where skill was installed
+    """
+    service = PreHookService(db)
+    result = service.install_skill(skill_id, user_id)
+
+    return result

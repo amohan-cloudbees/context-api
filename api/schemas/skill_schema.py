@@ -194,6 +194,7 @@ class SkillSuggestion(BaseModel):
     confidence: float
     reasoning: str
     skillMetadata: dict
+    installed: bool = Field(default=False, description="Whether the skill is already installed locally")
 
     class Config:
         json_schema_extra = {
@@ -205,7 +206,8 @@ class SkillSuggestion(BaseModel):
                     "name": "Security: Threat Model for MCPs",
                     "description": "Comprehensive security analysis...",
                     "capabilities": ["vulnerability-scanning", "compliance-check"]
-                }
+                },
+                "installed": True
             }
         }
 
